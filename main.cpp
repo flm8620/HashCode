@@ -1,6 +1,6 @@
 #include <iostream>
 using namespace std;
 int main() {
-  cout << "Hello, World!" << endl;
+  cout << "Hello, Branch 2!" << endl;
   return 0;
 }
