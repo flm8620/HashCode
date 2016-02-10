@@ -1,2 +1,6 @@
+# Files to ignore :
 .idea/
 CMakeLists.txt.user
+
+
+
