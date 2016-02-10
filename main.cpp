@@ -1,6 +1,6 @@
 #include <iostream>
 using namespace std;
 int main() {
-  cout << "Hello, Branch 2, 2nd commit!" << endl;
+  cout << "Hello, master merged Branch 2!" << endl;
   return 0;
 }
