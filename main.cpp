@@ -26,7 +26,8 @@ void readFile(string fileName, vector<bool> &wall, int &n, int &m) {
       }
     }
     char c;
-    input >> c;//delete '\n'
+    //input >> c;//delete '\n'
+    //cout<<c<<endl;
     //assert(c == '\n');
   }
 }
