@@ -3,8 +3,9 @@ using namespace std;
 void lorem_ipsum();
 
 int main() {
-  cout << "Hello, master merged Branch 2!" << endl;
-  return 0;
+	lorem_ipsum();
+	cout << "Hello, master merged Branch 2!" << endl;
+  	return 0;
 }
 
 void lorem_ipsum() {
