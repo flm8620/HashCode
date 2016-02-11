@@ -37,6 +37,7 @@ void randomPermutation(vector<int> &v){
 }
 
 bool allTrue(vector<bool> & wall, int top, int left, int bottom, int right){
+  if(top<0 || left<0 ||)
   for(int i=top;i<=bottom;i++){
     for(int j=left;j<=right;j++){
       if(!wall[i*M+j]) return false;
