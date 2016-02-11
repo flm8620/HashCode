@@ -39,6 +39,7 @@ void readFile(string fileName, vector<bool> &wall){
 }
 
 int main() {
-
+  ifstream input(fileName);
+  input >> N >> M >> Drone;
   return 0;
 }
