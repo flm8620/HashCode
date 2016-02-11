@@ -33,5 +33,20 @@ int Calculemap() {
 	return 0;
 }
 
-void SecondAlgo() { 
-    for(int i = 0; i<T; i++)
+
+struct Drone {
+    int x, y;
+    vector<>
+    vector<>
+    int compteur;
+};
+
+vector<Drone> drones;
+
+void SecondAlgo() {
+    vector<Drone> DroneDispo;
+    for(int i = 0; i<T; i++) {
+	update(drones)
+	Calculemap();
+	sort(commands, );
+	CalculeObjetRestant
