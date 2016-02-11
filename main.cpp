@@ -41,8 +41,9 @@ void readFile(string fileName, vector<bool> &wall){
 }
 
 int main() {
-  ifstream input(fileName);
-  input >> N >> M >> Drone >> TotalTime >> MaxLoad;
+  ifstream input(inputFile);
+  input >> N >> M >> DroneCount >> TotalTime >> MaxLoad;
+  cout<<N<<M;
   input >> TypeCount;
   for(int i=0;i<TypeCount;i++){
     int weight;
@@ -64,9 +65,17 @@ int main() {
   }
   input>>CmdCount;
   for(int i=0;i<CmdCount;i++){
-    int x,y;
-    input >> x >> y;
+    commands.push_back(Command());
+    Command &cmd=commands.back();
 
+    input >> cmd.x >> cmd.y;
+    input >> cmd.demandAmout;
+    for(int k=0;k<cmd.demandAmout;k++){
+      TypeId type;
+      input>>type;
+      cmd.productList.push_back(type);
+    }
   }
+  cout<<"hello"<<endl;
   return 0;
 }
