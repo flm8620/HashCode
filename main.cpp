@@ -25,7 +25,7 @@ void readFile(string fileName, vector<bool> &wall, int &n, int &m) {
         wall[i * m + j] = true;
       }
     }
-    char c;
+    //char c;
     //input >> c;//delete '\n'
     //cout<<c<<endl;
     //assert(c == '\n');
