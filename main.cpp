@@ -24,21 +24,49 @@ int MaxLoad;
 int TypeCount;
 int WareCount;
 int CmdCount;
-vector<int> TypeWeight;
+typedef int TypeId;
+vector<TypeId> TypeWeight;
 vector<pair<int,int> > WarePos;
 vector<vector<int> > WareProductAmount;
+
 struct Command{
   int x,y;
   int demandAmout;
   vector<int> productList;
 };
-
+vector<Command> commands;
 
 void readFile(string fileName, vector<bool> &wall){
 
 }
 
 int main() {
+  ifstream input(fileName);
+  input >> N >> M >> Drone >> TotalTime >> MaxLoad;
+  input >> TypeCount;
+  for(int i=0;i<TypeCount;i++){
+    int weight;
+    input>>weight;
+    TypeWeight.push_back(weight);
+  }
+  input >> WareCount;
+  for(int i=0;i<WareCount;i++){
+    int x,y;
+    input >> x >> y;
+    WarePos.push_back(make_pair(x,y));
+    WareProductAmount.push_back(vector<int>());
+    vector<int> &Dispon = WareProductAmount.back();
+    for(int j=0;j<TypeCount;j++){
+      int numProductDispon;
+      input>>numProductDispon;
+      Dispon.push_back(numProductDispon);
+    }
+  }
+  input>>CmdCount;
+  for(int i=0;i<CmdCount;i++){
+    int x,y;
+    input >> x >> y;
 
+  }
   return 0;
 }
