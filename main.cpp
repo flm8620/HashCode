@@ -25,7 +25,7 @@ int TypeCount;
 int WareCount;
 int CmdCount;
 typedef int TypeId;
-vector<TypeId> TypeWeight;
+vector<int> TypeWeight;
 vector<pair<int,int> > WarePos;
 vector<vector<int> > WareProductAmount;
 
@@ -36,11 +36,7 @@ struct Command{
 };
 vector<Command> commands;
 
-void readFile(string fileName, vector<bool> &wall){
-
-}
-
-int main() {
+void readFile(string inputFile){
   ifstream input(inputFile);
   input >> N >> M >> DroneCount >> TotalTime >> MaxLoad;
   input >> TypeCount;
@@ -74,6 +70,28 @@ int main() {
       input>>type;
       cmd.productList.push_back(type);
     }
+  }
+}
+
+int main() {
+  readFile(inputFile);
+  vector<bool> isDestination(N*M,false);
+  vector<bool> isWareHouse(N*M,false);
+  for(auto cmd : commands){
+    isDestination[cmd.x*M+cmd.y]=true;
+  }
+  for(auto ware : WarePos){
+    isWareHouse[ware.first*M+ware.second]=true;
+  }
+  for(int i=0;i<N;i++){
+    for(int j=0;j<M;j++){
+      if(isWareHouse[i*M+j])
+        cout<<'#';
+      else
+        cout<<' ';
+
+    }
+    cout<<endl;
   }
   return 0;
 }
