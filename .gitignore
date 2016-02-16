@@ -2,6 +2,7 @@
 .idea/
 CMakeLists.txt.user
 *.autosave
+imgOut/
 
 
 

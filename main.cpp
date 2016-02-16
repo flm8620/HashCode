@@ -16,6 +16,8 @@
 // turn on this if you want to get the output of drones
 //#define WRITE_OUTPUT
 
+#define DRAW_IMG
+
 #ifndef srcPath
 #define srcPath "."
 #endif
@@ -82,7 +84,9 @@ int distanceRound(int x1,int y1,int x2,int y2){
 }
 
 void finishOneCommand(){// and we add to the total score
-  Score += ceil((double(TotalTime - currentDay)) / TotalTime * 100);
+  double ds=ceil((double(TotalTime - currentDay)) / TotalTime * 100);
+  Score += ds;
+  //cout<<"Score+="<<ds<<" ="<<Score<<endl;
 }
 
 struct WareHouse{
@@ -157,6 +161,8 @@ struct DroneTask{
 struct Drone{
   DroneId id;
   int x,y;
+  double xSimu,ySimu;
+  double dx,dy;
   queue<DroneOrder> orderQueue;
   DroneTask currentTask;
   multiset<pair<TypeId,CmdId> > loadedProducts;
@@ -172,6 +178,21 @@ struct Drone{
       sum+=TypeWeight[id.first];
     }
     return sum;
+  }
+  void setXY(int x,int y){
+    this->x=x;
+    this->y=y;
+#ifdef DRAW_IMG
+    this->xSimu=x;
+    this->ySimu=y;
+#endif
+  }
+  void setDirection(int x0,int y0){
+    dx=x0-x;
+    dy=y0-y;
+    double l=sqrt(dx*dx+dy*dy);
+    dx/=l;
+    dy/=l;
   }
 
   void eraseProduct(pair<TypeId,CmdId> id){
@@ -195,13 +216,10 @@ struct Drone{
       this->isBusy=true;
       this->doTask();
     }
-#ifdef FengLeman_DEBUG
-    //    if(!this->isBusy)
-    //      cout<<"drone "<<this->id<<" has nothing to do."<<endl;
-#endif
   }
 
   void giveOneOrder(DroneOrder order){
+    orderQueue.push(order);
 #ifdef WRITE_OUTPUT
     switch(order.orderType){
       case DroneOrder::Deliver:
@@ -235,20 +253,18 @@ struct Drone{
         break;
     }
 #endif
-    orderQueue.push(order);
+
   }
   void arrivedNextTaskPosition(){
     DroneOrder &nextOrder = orderQueue.front();
     switch(nextOrder.orderType){
       case DroneOrder::Load :
       case DroneOrder::Unload :{
-        this->x = wareHouses[nextOrder.wareId].x;
-        this->y = wareHouses[nextOrder.wareId].y;
+        this->setXY(wareHouses[nextOrder.wareId].x,wareHouses[nextOrder.wareId].y);
         break;
       }
       case DroneOrder::Deliver:{
-        this->x = commands[nextOrder.commandId].x;
-        this->y = commands[nextOrder.commandId].y;
+        this->setXY(commands[nextOrder.commandId].x,commands[nextOrder.commandId].y);
         break;
       }
     }
@@ -260,6 +276,9 @@ struct Drone{
     currentTask.timeToFinish=distanceRound(x,y,w.x,w.y);
     currentTask.itemsToPickOrDrop.clear();
     currentTask.commandId=-1;
+#ifdef DRAW_IMG
+    setDirection(w.x,w.y);
+#endif
   }
   void setTask_GotoClient(CmdId id){
     currentTask.taskType=DroneTask::WaytoClient;
@@ -268,6 +287,9 @@ struct Drone{
     currentTask.timeToFinish=distanceRound(x,y,c.x,c.y);
     currentTask.itemsToPickOrDrop.clear();
     currentTask.wareId=-1;
+#ifdef DRAW_IMG
+    setDirection(c.x,c.y);
+#endif
   }
 
   void takeNextOrder_makeItATask(){
@@ -381,6 +403,9 @@ struct Drone{
       }
       case DroneTask::WaytoClient:
       case DroneTask::WaytoWareHouse:{
+#ifdef DRAW_IMG
+        xSimu+=dx;ySimu+=dy;
+#endif
         currentTask.timeToFinish--;
         if(currentTask.timeToFinish==0){
           this->isDoingATask=false;
@@ -389,6 +414,7 @@ struct Drone{
         }
       }
     }
+
   }
 };
 vector<Drone> drones;
@@ -456,8 +482,7 @@ void initializeDrone(){
   for(DroneId i=0;i<DroneCount;i++){
     Drone drone;
     drone.id=i;
-    drone.x=wareHouses[0].x;
-    drone.y=wareHouses[0].y;
+    drone.setXY(wareHouses[0].x,wareHouses[0].y);
     drones.push_back(drone);
   }
 }
@@ -604,13 +629,14 @@ void reserveProductsForTravel(Travel& travel){
 void dronePickTravel(vector<Travel>& travels, Drone& drone, vector<pair<DroneId,Travel> >& drone_travel){
   //for(auto &drone : drones){
 
-  sort(travels.begin(),travels.end(),[drone](const Travel& t1,const Travel& t2){
+  const double lambda = 2.8;
+  sort(travels.begin(),travels.end(),[drone,lambda](const Travel& t1,const Travel& t2){
     WareHouse& w1=wareHouses[t1.wareId];
     WareHouse& w2=wareHouses[t2.wareId];
     int distanceGoto1 = distanceRound(drone.x,drone.y,w1.x,w1.y);
     int distanceGoto2 = distanceRound(drone.x,drone.y,w2.x,w2.y);
-    double score1 = t1.commandFinishPercentage/(t1.distance+distanceGoto1);
-    double score2 = t2.commandFinishPercentage/(t2.distance+distanceGoto2);
+    double score1 = t1.commandFinishPercentage/(t1.distance+distanceGoto1*lambda);
+    double score2 = t2.commandFinishPercentage/(t2.distance+distanceGoto2*lambda);
     return score1<score2;
   });
   if(travels.empty()){
@@ -659,7 +685,7 @@ void droneConfirmTravel(Drone &drone, Travel travel,map<CmdId,vector<CmdId> >& n
     // if its neighbour is too far away, we don't want to deliver to him
     //if(distanceRound(lastX,lastY,commands[cmdId].x,commands[cmdId].y)>30){
     if(distanceRound(mainCmd.x,mainCmd.y,commands[cmdId].x,commands[cmdId].y)
-       >travel.distance*0.5){//<- change this parameter
+       >travel.distance*1){//<- change this parameter
       break;
     }
 
@@ -702,11 +728,42 @@ void droneConfirmTravel(Drone &drone, Travel travel,map<CmdId,vector<CmdId> >& n
     drone.giveOneOrder(order);
   }
 }
+void write(vector<unsigned char> & R,vector<unsigned char> & G,vector<unsigned char> & B
+           ,int N,int M,int number);
+void drawImg(int currentDay){
+  vector<unsigned char> R(N*M,255);
+  vector<unsigned char> G(N*M,255);
+  vector<unsigned char> B(N*M,255);
+  for(auto &w : wareHouses){
+    R[w.x*M+w.y]=200;
+    G[w.x*M+w.y]=200;
+    B[w.x*M+w.y]=50;
+  }
+  for(auto &c : commands){
+    if(c.demands.size()>0){
+      R[c.x*M+c.y]=0;
+      G[c.x*M+c.y]=0;
+      B[c.x*M+c.y]=0;
+    }
+  }
+  for(auto &d : drones){
+    int x=round(d.xSimu);
+    int y=round(d.ySimu);
+    x=min(N,max(x,0));
+    y=min(M,max(y,0));
+    R[x*M+y]=0;
+    G[x*M+y]=0;
+    B[x*M+y]=255;
+  }
+  write(R,G,B,N,M,currentDay);
+}
 
 int main() {
   readFile(inputFile);
   initializeDrone();
+#ifdef WRITE_OUTPUT
   output.open(solutionFile);
+#endif
 
   //for each client, we want to know the 20 nearest clients to him
   const int NearestCmdCount=20;
@@ -719,15 +776,30 @@ int main() {
   clock_t time1, time2, timeStart,timeEnd;
   int last1000Day=0;
   time1=timeStart=clock();
+  int interval=100;
 
   //The main loop of day(turn)
+  //TotalTime=100000;
+  bool noMoreDemand=false;
   for(currentDay=0;currentDay<TotalTime;currentDay++){
+
+    if(currentDay>2800)break;
+
+
 #ifdef FengLeman_DEBUG
     cout<<endl<<"DAY "<<currentDay<<" :"<<endl;
 #endif
     //the timer, not important...
-    if(currentDay-last1000Day>=1000){
+    if(currentDay-last1000Day>=interval){
       cout<<"DAY "<<currentDay<<endl;
+
+      if(noMoreDemand)cout<<"no more demand"<<endl;
+#ifdef DRAW_IMG
+      if(currentDay>2000){
+        interval=8;
+        drawImg(currentDay);
+      }
+#endif
       last1000Day=currentDay;
       time2=clock();
       cout << ((float) (time2 - time1) / CLOCKS_PER_SEC) << " s" << endl;
@@ -741,6 +813,9 @@ int main() {
     // map<CmdId, vector<pair<WareId, TypeId> > > cmd_mapTo_FlowList
     // for each client(command), we have a list of pair of (warehouseId, productId)
     buildProductFlowGraph(cmd_mapTo_FlowList);
+    if(cmd_mapTo_FlowList.empty()){
+      noMoreDemand=true;
+    }
 
 
     // each client(command) propose a list of travels
@@ -780,18 +855,20 @@ int main() {
 
     // if all drones are busy, that means for the next turn, no new travels are need to be calculated
     // we just let all drone to count down their task timer
-    bool allDroneBusy=true;
-    while(allDroneBusy){
-      for(auto &drone : drones){
-        if(!drone.isBusy) allDroneBusy=false;
-      }
-      if(allDroneBusy){
-        currentDay++;
-#ifdef FengLeman_DEBUG
-        cout<<endl<<"DAY "<<currentDay<<" :"<<endl;
-#endif
+    if(interval>10){
+      bool allDroneBusy=true;
+      while(allDroneBusy){
         for(auto &drone : drones){
-          drone.makeOneTurn();
+          if(!drone.isBusy) allDroneBusy=false;
+        }
+        if(allDroneBusy){
+          currentDay++;
+#ifdef FengLeman_DEBUG
+          cout<<endl<<"DAY busy"<<currentDay<<" :"<<endl;
+#endif
+          for(auto &drone : drones){
+            drone.makeOneTurn();
+          }
         }
       }
     }
@@ -800,6 +877,8 @@ int main() {
   cout<<"Total Score "<<Score<<endl;
   timeEnd=clock();
   cout <<"Total time consumed: "<< ((float) (timeEnd - timeStart) / CLOCKS_PER_SEC) << " s" << endl;
+#ifdef WRITE_OUTPUT
   output.close();
+#endif
   return 0;
 }
