@@ -3,6 +3,8 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
+#include <cassert>
 #ifndef srcPath
 #define srcPath "."
 #endif
@@ -15,14 +17,21 @@ void write(vector<unsigned char> & R,vector<unsigned char> & G,vector<unsigned c
   ss<<setfill ('0') << setw (7)<< number;
   string num;
   ss>>num;
-  ofstream imgOut(imgFolder+"img"+num+".ppm");
-  imgOut<<"P3"<<endl;
-  imgOut<<M<<' '<<N<<endl;
+  ofstream imgOut(imgFolder+"img"+num+".ppm",ios::binary);
+
+  ss.clear();
+  ss<<"P6 "<<M<<' '<<N<<' '<<255<<' ';
+  string s;
+  ss>>s;
+  imgOut.write(s.c_str(),s.size());
+  //imgOut<<'P'<<'6'<<' ';
+  //imgOut<<M<<N<<endl;
   for(int i=0;i<N;i++){
     for(int j=0;j<M;j++){
-      imgOut<<int(R[i*M+j])<<' '<<int(G[i*M+j])<<' '<<int(B[i*M+j])<<' ';
+      imgOut.write((char *)&(R[i*M+j]),sizeof(unsigned char));
+      imgOut.write((char *)&(G[i*M+j]),sizeof(unsigned char));
+      imgOut.write((char *)&(B[i*M+j]),sizeof(unsigned char));
     }
-    imgOut<<endl;
   }
   imgOut.close();
 }
