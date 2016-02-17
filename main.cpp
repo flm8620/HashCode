@@ -26,16 +26,16 @@
 
 using namespace std;
 
-//string inputFile = srcPath "/busy_day.in";
+string inputFile = srcPath "/busy_day.in";
 //string inputFile = srcPath "/mother_of_all_warehouses.in";
-string inputFile = srcPath "/redundancy.in";
+//string inputFile = srcPath "/redundancy.in";
 
 string solutionFile = inputFile+".solution";
 ofstream output;
 
 //parameter:
-const int NearestClientsSearch=20;
-const double droneWareDistanceMultiplier=1.7;
+const int NearestClientsSearch=50;
+const double droneWareDistanceMultiplier=2.8;
 const double maxNeighborSearchingMultiplier=1.2;
 
 typedef int TypeId;
@@ -180,6 +180,7 @@ struct Drone{
   int x,y;
   double xSimu,ySimu;
   double dx,dy;
+  WareId lastVisitedWare;
   queue<DroneOrder> orderQueue;
   DroneTask currentTask;
   multiset<pair<TypeId,CmdId> > loadedProducts;
@@ -239,35 +240,35 @@ struct Drone{
     orderQueue.push(order);
 #ifdef WRITE_OUTPUT
     switch(order.orderType){
-    case DroneOrder::Deliver:
-      for(auto item : order.itemsToPickOrDrop)
-        output<<id<<" D "<<order.commandId<<" "<<item.first<<" 1"<<endl;
-      break;
-    case DroneOrder::Load:
-      for(auto item : order.itemsToPickOrDrop)
-        output<<id<<" L "<<order.wareId<<" "<<item.first<<" 1"<<endl;
-      break;
-    case DroneOrder::Unload:
-      for(auto item : order.itemsToPickOrDrop)
-        output<<id<<" U "<<order.wareId<<" "<<item.first<<" 1"<<endl;
-      break;
+      case DroneOrder::Deliver:
+        for(auto item : order.itemsToPickOrDrop)
+          output<<id<<" D "<<order.commandId<<" "<<item.first<<" 1"<<endl;
+        break;
+      case DroneOrder::Load:
+        for(auto item : order.itemsToPickOrDrop)
+          output<<id<<" L "<<order.wareId<<" "<<item.first<<" 1"<<endl;
+        break;
+      case DroneOrder::Unload:
+        for(auto item : order.itemsToPickOrDrop)
+          output<<id<<" U "<<order.wareId<<" "<<item.first<<" 1"<<endl;
+        break;
     }
 #endif
 #ifdef FengLeman_DEBUG
     switch(order.orderType){
-    case DroneOrder::Deliver:
-      cout<<"drone "<<id<<" get order : Deliver to Client"<<order.commandId<<endl;
-      break;
-    case DroneOrder::Load:
-      cout<<"drone "<<id<<" get order : Load at Ware"<<order.wareId<<endl;
-      for(auto item : order.itemsToPickOrDrop){
-        cout<<"Item"<<item.first<<"->Client"<<item.second<<' ';
-      }
-      cout<<endl;
-      break;
-    case DroneOrder::Unload:
-      cout<<"drone "<<id<<" get order : Unload at Ware"<<order.wareId<<endl;
-      break;
+      case DroneOrder::Deliver:
+        cout<<"drone "<<id<<" get order : Deliver to Client"<<order.commandId<<endl;
+        break;
+      case DroneOrder::Load:
+        cout<<"drone "<<id<<" get order : Load at Ware"<<order.wareId<<endl;
+        for(auto item : order.itemsToPickOrDrop){
+          cout<<"Item"<<item.first<<"->Client"<<item.second<<' ';
+        }
+        cout<<endl;
+        break;
+      case DroneOrder::Unload:
+        cout<<"drone "<<id<<" get order : Unload at Ware"<<order.wareId<<endl;
+        break;
     }
 #endif
 
@@ -275,15 +276,16 @@ struct Drone{
   void arrivedNextTaskPosition(){
     DroneOrder &nextOrder = orderQueue.front();
     switch(nextOrder.orderType){
-    case DroneOrder::Load :
-    case DroneOrder::Unload :{
-      this->setXY(wareHouses[nextOrder.wareId].x,wareHouses[nextOrder.wareId].y);
-      break;
-    }
-    case DroneOrder::Deliver:{
-      this->setXY(commands[nextOrder.commandId].x,commands[nextOrder.commandId].y);
-      break;
-    }
+      case DroneOrder::Load :
+      case DroneOrder::Unload :{
+        this->setXY(wareHouses[nextOrder.wareId].x,wareHouses[nextOrder.wareId].y);
+        lastVisitedWare=nextOrder.wareId;
+        break;
+      }
+      case DroneOrder::Deliver:{
+        this->setXY(commands[nextOrder.commandId].x,commands[nextOrder.commandId].y);
+        break;
+      }
     }
   }
   void setTask_GotoWareHouse(WareId id){
@@ -319,117 +321,117 @@ struct Drone{
     DroneOrder order = orderQueue.front();
 
     switch(order.orderType){
-    case DroneOrder::Load:
-    {
-      if(x==wareHouses[order.wareId].x && y==wareHouses[order.wareId].y){
-        currentTask.taskType=DroneTask::Loading;
-        currentTask.wareId=order.wareId;
-        currentTask.commandId=order.commandId;
-        currentTask.timeToFinish=1;
-        currentTask.itemsToPickOrDrop=order.itemsToPickOrDrop;
-        orderQueue.pop();
+      case DroneOrder::Load:
+      {
+        if(x==wareHouses[order.wareId].x && y==wareHouses[order.wareId].y){
+          currentTask.taskType=DroneTask::Loading;
+          currentTask.wareId=order.wareId;
+          currentTask.commandId=order.commandId;
+          currentTask.timeToFinish=1;
+          currentTask.itemsToPickOrDrop=order.itemsToPickOrDrop;
+          orderQueue.pop();
 #ifdef FengLeman_DEBUG
-        cout<<"drone "<<this->id<<", new task : Load at Ware"
-           <<order.wareId<<endl;
+          cout<<"drone "<<this->id<<", new task : Load at Ware"
+             <<order.wareId<<endl;
 #endif
 
-      }else{
-        setTask_GotoWareHouse(order.wareId);
+        }else{
+          setTask_GotoWareHouse(order.wareId);
 #ifdef FengLeman_DEBUG
-        cout<<"drone "<<this->id<<", new task : FlyTo Ware"
-           <<order.wareId<<endl;
+          cout<<"drone "<<this->id<<", new task : FlyTo Ware"
+             <<order.wareId<<endl;
 #endif
+        }
+        break;
       }
-      break;
-    }
-    case DroneOrder::Unload:
-    {
-      if(x==wareHouses[order.wareId].x && y==wareHouses[order.wareId].y){
-        currentTask.taskType=DroneTask::Unloading;
-        currentTask.wareId=order.wareId;
-        currentTask.timeToFinish=1;
-        currentTask.itemsToPickOrDrop=order.itemsToPickOrDrop;
-        orderQueue.pop();
+      case DroneOrder::Unload:
+      {
+        if(x==wareHouses[order.wareId].x && y==wareHouses[order.wareId].y){
+          currentTask.taskType=DroneTask::Unloading;
+          currentTask.wareId=order.wareId;
+          currentTask.timeToFinish=1;
+          currentTask.itemsToPickOrDrop=order.itemsToPickOrDrop;
+          orderQueue.pop();
 #ifdef FengLeman_DEBUG
-        cout<<"drone "<<this->id<<", new task : Unload at Ware"
-           <<order.wareId<<endl;
+          cout<<"drone "<<this->id<<", new task : Unload at Ware"
+             <<order.wareId<<endl;
 #endif
-      }else{
-        setTask_GotoWareHouse(order.wareId);
+        }else{
+          setTask_GotoWareHouse(order.wareId);
 #ifdef FengLeman_DEBUG
-        cout<<"drone "<<this->id<<", new task : FlyTo Ware"
-           <<order.wareId<<endl;
+          cout<<"drone "<<this->id<<", new task : FlyTo Ware"
+             <<order.wareId<<endl;
 #endif
+        }
+        break;
       }
-      break;
-    }
-    case DroneOrder::Deliver:
-    {
-      if(x==commands[order.commandId].x && y==commands[order.commandId].y){
-        currentTask.taskType=DroneTask::DropingToClient;
-        currentTask.commandId=order.commandId;
-        currentTask.timeToFinish=1;
-        currentTask.itemsToPickOrDrop=order.itemsToPickOrDrop;
-        orderQueue.pop();
+      case DroneOrder::Deliver:
+      {
+        if(x==commands[order.commandId].x && y==commands[order.commandId].y){
+          currentTask.taskType=DroneTask::DropingToClient;
+          currentTask.commandId=order.commandId;
+          currentTask.timeToFinish=1;
+          currentTask.itemsToPickOrDrop=order.itemsToPickOrDrop;
+          orderQueue.pop();
 #ifdef FengLeman_DEBUG
-        cout<<"drone "<<this->id<<", new task : Deliver at Client"
-           <<order.commandId<<endl;
+          cout<<"drone "<<this->id<<", new task : Deliver at Client"
+             <<order.commandId<<endl;
 #endif
-      }else{
-        setTask_GotoClient(order.commandId);
+        }else{
+          setTask_GotoClient(order.commandId);
 #ifdef FengLeman_DEBUG
-        cout<<"drone "<<this->id<<", new task : FlyTo Client"
-           <<order.commandId<<endl;
+          cout<<"drone "<<this->id<<", new task : FlyTo Client"
+             <<order.commandId<<endl;
 #endif
+        }
+        break;
       }
-      break;
-    }
     }
   }
   void doTask(){
     switch (currentTask.taskType){
-    case DroneTask::Loading :{
-      assert(x==wareHouses[currentTask.wareId].x && y==wareHouses[currentTask.wareId].y);
-      for(auto id : currentTask.itemsToPickOrDrop){
-        wareHouses[currentTask.wareId].productLoadedOnDrone(id.first);
-        this->addProduct(id);
-      }
-      this->isDoingATask=false;
-      break;
-    }
-    case DroneTask::Unloading :{
-      assert(x==wareHouses[currentTask.wareId].x && y==wareHouses[currentTask.wareId].y);
-      loadedProducts=currentTask.itemsToPickOrDrop;
-      for(auto id : currentTask.itemsToPickOrDrop){
-        this->eraseProduct(id);
-        wareHouses[currentTask.wareId].addProduct(id.first);
-      }
-      this->isDoingATask=false;
-      break;
-    }
-    case DroneTask::DropingToClient:{
-      assert(x==commands[currentTask.commandId].x && y==commands[currentTask.commandId].y);
-      loadedProducts=currentTask.itemsToPickOrDrop;
-      for(auto id : currentTask.itemsToPickOrDrop){
-        assert(id.second == currentTask.commandId);
-        this->eraseProduct(id);
-        commands[currentTask.commandId].productReceived(id.first);
-      }
-      this->isDoingATask=false;
-      break;
-    }
-    case DroneTask::WaytoClient:
-    case DroneTask::WaytoWareHouse:{
-#ifdef DRAW_IMG
-      xSimu+=dx;ySimu+=dy;
-#endif
-      currentTask.timeToFinish--;
-      if(currentTask.timeToFinish==0){
+      case DroneTask::Loading :{
+        assert(x==wareHouses[currentTask.wareId].x && y==wareHouses[currentTask.wareId].y);
+        for(auto id : currentTask.itemsToPickOrDrop){
+          wareHouses[currentTask.wareId].productLoadedOnDrone(id.first);
+          this->addProduct(id);
+        }
         this->isDoingATask=false;
-        this->arrivedNextTaskPosition();
         break;
       }
-    }
+      case DroneTask::Unloading :{
+        assert(x==wareHouses[currentTask.wareId].x && y==wareHouses[currentTask.wareId].y);
+        loadedProducts=currentTask.itemsToPickOrDrop;
+        for(auto id : currentTask.itemsToPickOrDrop){
+          this->eraseProduct(id);
+          wareHouses[currentTask.wareId].addProduct(id.first);
+        }
+        this->isDoingATask=false;
+        break;
+      }
+      case DroneTask::DropingToClient:{
+        assert(x==commands[currentTask.commandId].x && y==commands[currentTask.commandId].y);
+        loadedProducts=currentTask.itemsToPickOrDrop;
+        for(auto id : currentTask.itemsToPickOrDrop){
+          assert(id.second == currentTask.commandId);
+          this->eraseProduct(id);
+          commands[currentTask.commandId].productReceived(id.first);
+        }
+        this->isDoingATask=false;
+        break;
+      }
+      case DroneTask::WaytoClient:
+      case DroneTask::WaytoWareHouse:{
+#ifdef DRAW_IMG
+        xSimu+=dx;ySimu+=dy;
+#endif
+        currentTask.timeToFinish--;
+        if(currentTask.timeToFinish==0){
+          this->isDoingATask=false;
+          this->arrivedNextTaskPosition();
+          break;
+        }
+      }
     }
 
   }
@@ -505,6 +507,7 @@ void initializeDrone(){
     Drone drone;
     drone.id=i;
     drone.setXY(wareHouses[0].x,wareHouses[0].y);
+    drone.lastVisitedWare=0;
     drones.push_back(drone);
   }
 }
@@ -556,7 +559,12 @@ void buildProductFlowGraph(map<CmdId, vector<pair<WareId, TypeId> > >&cmd_mapTo_
 {
   cmd_mapTo_FlowList.clear();
   vector<WareHouse> wareHousesCopy=wareHouses;
-  for(CmdId k=0;k<CmdCount;k++){
+  vector<CmdId> sorted;
+  for(CmdId k=0;k<CmdCount;k++)sorted.push_back(k);
+  sort(sorted.begin(),sorted.end(),[](CmdId id1,CmdId id2){
+    return commands[id1].demands.size()<commands[id2].demands.size();
+  });
+  for(CmdId k : sorted){
     Command &cmd = commands[k];
 
     for(auto itemId : cmd.demands){
@@ -653,8 +661,9 @@ void dronePickTravel(vector<Travel>& travels, Drone& drone, vector<pair<DroneId,
   sort(travels.begin(),travels.end(),[drone,lambda](const Travel& t1,const Travel& t2){
     WareHouse& w1=wareHouses[t1.wareId];
     WareHouse& w2=wareHouses[t2.wareId];
-    int distanceGoto1 = distanceRound(drone.x,drone.y,w1.x,w1.y);
-    int distanceGoto2 = distanceRound(drone.x,drone.y,w2.x,w2.y);
+    WareHouse& lastW=wareHouses[drone.lastVisitedWare];
+    int distanceGoto1 = distanceRound(lastW.x,lastW.y,w1.x,w1.y);
+    int distanceGoto2 = distanceRound(lastW.x,lastW.y,w2.x,w2.y);
     double score1 = t1.cmdPercent/(t1.distance+distanceGoto1*lambda);
     double score2 = t2.cmdPercent/(t2.distance+distanceGoto2*lambda);
     //double score1 = t1.commandFinishPercentageTotal/(t1.distance+distanceGoto1*lambda);
