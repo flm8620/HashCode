@@ -11,12 +11,13 @@
 #include <cassert>
 
 #include "knapsack.h"
+#include "shortestpath.h"
 
 // turn on this if you want to see the detail
 //#define FengLeman_DEBUG
 
 // turn on this if you want to get the output of drones
-#define WRITE_OUTPUT
+//#define WRITE_OUTPUT
 
 //#define DRAW_IMG
 
@@ -26,21 +27,21 @@
 
 using namespace std;
 
-string inputFile = srcPath "/busy_day.in";
+//string inputFile = srcPath "/busy_day.in";
 //string inputFile = srcPath "/mother_of_all_warehouses.in";
-//string inputFile = srcPath "/redundancy.in";
+string inputFile = srcPath "/redundancy.in";
 
 string solutionFile = inputFile+".solution";
 ofstream output;
 
 //parameter:
-const int NearestClientsSearch=50;
-const double droneWareDistanceMultiplier=2.8;
+const int NearestClientsSearch=20;
+const double droneWareDistanceMultiplier=1.8;
 const double maxNeighborSearchingMultiplier=1.2;
 //best paramter:
-//busy: 50 2.8 1.2
-//mother: 30 0 0.28
-//redundancy: 20 1.7 1.2
+//busy: 50 2.9 0.9 -> 110649
+//mother: 30 0.1 0.33 -> 75624
+//redundancy: 20 1.8 1.2 -> 97921
 typedef int TypeId;
 typedef int CmdId;
 typedef int WareId;
@@ -693,17 +694,19 @@ void droneConfirmTravel(Drone &drone, Travel travel,map<CmdId,vector<CmdId> >& n
   }
 
   // order for deliver
-  DroneOrder orderDeliver;
-  orderDeliver.orderType=DroneOrder::Deliver;
-  orderDeliver.commandId=travel.commandId;
+  DroneOrder orderDeliverMain;
+  orderDeliverMain.orderType=DroneOrder::Deliver;
+  orderDeliverMain.commandId=travel.commandId;
   for(auto typeId : travel.productsToDeliver){
-    orderDeliver.itemsToPickOrDrop.insert(make_pair(typeId,travel.commandId));
+    orderDeliverMain.itemsToPickOrDrop.insert(make_pair(typeId,travel.commandId));
   }
 
   //try to find some other product to deliver together in this travel
   Command &mainCmd = commands[travel.commandId];
   WareHouse &ware = wareHouses[travel.wareId];
   vector<DroneOrder> deliverOrders;
+  deliverOrders.push_back(orderDeliverMain);
+
   //int lastX=mainCmd.x, lastY = mainCmd.y;
   vector<CmdId> nextNearestClient=nearestClient[travel.commandId];
   reverse(nextNearestClient.begin(),nextNearestClient.end());//nearest client is at the end
@@ -752,10 +755,25 @@ void droneConfirmTravel(Drone &drone, Travel travel,map<CmdId,vector<CmdId> >& n
   }
 
 
+  //best visit order of clients:
+  int s=deliverOrders.size();
+  vector<int> disMat(s*s);
+  vector<int> ware_cmd_Dis(s);
+  for(int i=0;i<s;i++){
+    for(int j=i;j<s;j++){
+      disMat[i*s+j]=disMat[j*s+i]=
+          distanceRound(commands[deliverOrders[i].commandId].x,commands[deliverOrders[i].commandId].y,
+          commands[deliverOrders[j].commandId].x,commands[deliverOrders[j].commandId].y);
+    }
+    ware_cmd_Dis[i]=distanceRound(ware.x,ware.y,
+                                  commands[deliverOrders[i].commandId].x,
+                                  commands[deliverOrders[i].commandId].y);
+  }
+  vector<int> result = bestVisitOrder(disMat,ware_cmd_Dis);
+
   drone.giveOneOrder(orderLoad);
-  drone.giveOneOrder(orderDeliver);
-  for(auto &order : deliverOrders){
-    drone.giveOneOrder(order);
+  for(auto r:result){
+    drone.giveOneOrder(deliverOrders[r]);
   }
 }
 void write(vector<unsigned char> & R,vector<unsigned char> & G,vector<unsigned char> & B
@@ -789,6 +807,16 @@ void drawImg(int currentDay){
 }
 
 int main() {
+//  vector<int> ids={0,1,2,3,4};
+//  vector<int> Mat={0,1,2,3,4,
+//                   1,0,1,2,3,
+//                   2,1,0,1,2,
+//                   3,2,1,0,1,
+//                   4,3,2,1,0};
+//  vector<int> wareDis={5,5,5,1,1};
+//  vector<int> r = bestVisitOrder(ids,Mat,wareDis);
+//  for(auto o:r)cout<<o<<endl;
+//  return 0;
   readFile(inputFile);
   initializeDrone();
 #ifdef WRITE_OUTPUT
