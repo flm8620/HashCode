@@ -11,12 +11,14 @@
 #include <cassert>
 
 #include "knapsack.h"
+#include "shortestpath.h"
+#include "munkres.h"
 
 // turn on this if you want to see the detail
 //#define FengLeman_DEBUG
 
 // turn on this if you want to get the output of drones
-#define WRITE_OUTPUT
+// #define WRITE_OUTPUT
 
 //#define DRAW_IMG
 
@@ -35,9 +37,12 @@ ofstream output;
 
 //parameter:
 const int NearestClientsSearch=50;
-const double droneWareDistanceMultiplier=2.8;
-const double maxNeighborSearchingMultiplier=1.2;
-
+const double droneWareDistanceMultiplier=2.9;
+const double maxNeighborSearchingMultiplier=0.9;
+//best paramter:
+//busy: 50 2.9 0.9 -> 110649
+//mother: 30 0.1 0.33 -> 75624
+//redundancy: 20 1.8 1.2 -> 97921
 typedef int TypeId;
 typedef int CmdId;
 typedef int WareId;
@@ -279,7 +284,6 @@ struct Drone{
       case DroneOrder::Load :
       case DroneOrder::Unload :{
         this->setXY(wareHouses[nextOrder.wareId].x,wareHouses[nextOrder.wareId].y);
-        lastVisitedWare=nextOrder.wareId;
         break;
       }
       case DroneOrder::Deliver:{
@@ -559,12 +563,12 @@ void buildProductFlowGraph(map<CmdId, vector<pair<WareId, TypeId> > >&cmd_mapTo_
 {
   cmd_mapTo_FlowList.clear();
   vector<WareHouse> wareHousesCopy=wareHouses;
-  vector<CmdId> sorted;
-  for(CmdId k=0;k<CmdCount;k++)sorted.push_back(k);
-  sort(sorted.begin(),sorted.end(),[](CmdId id1,CmdId id2){
+  vector<CmdId> sortedId;
+  for(CmdId k=0;k<CmdCount;k++) sortedId.push_back(k);
+  sort(sortedId.begin(),sortedId.end(),[](CmdId id1,CmdId id2){
     return commands[id1].demands.size()<commands[id2].demands.size();
   });
-  for(CmdId k : sorted){
+  for(CmdId k : sortedId){
     Command &cmd = commands[k];
 
     for(auto itemId : cmd.demands){
@@ -654,32 +658,6 @@ void reserveProductsForTravel(Travel& travel){
   }
 }
 
-void dronePickTravel(vector<Travel>& travels, Drone& drone, vector<pair<DroneId,Travel> >& drone_travel){
-  //for(auto &drone : drones){
-
-  const double lambda = droneWareDistanceMultiplier;
-  sort(travels.begin(),travels.end(),[drone,lambda](const Travel& t1,const Travel& t2){
-    WareHouse& w1=wareHouses[t1.wareId];
-    WareHouse& w2=wareHouses[t2.wareId];
-    WareHouse& lastW=wareHouses[drone.lastVisitedWare];
-    int distanceGoto1 = distanceRound(lastW.x,lastW.y,w1.x,w1.y);
-    int distanceGoto2 = distanceRound(lastW.x,lastW.y,w2.x,w2.y);
-    double score1 = t1.cmdPercent/(t1.distance+distanceGoto1*lambda);
-    double score2 = t2.cmdPercent/(t2.distance+distanceGoto2*lambda);
-    //double score1 = t1.commandFinishPercentageTotal/(t1.distance+distanceGoto1*lambda);
-    //double score2 = t2.commandFinishPercentageTotal/(t2.distance+distanceGoto2*lambda);
-    return score1<score2;
-  });
-  if(travels.empty()){
-    return;
-  }
-  Travel bestTravel = travels.back();
-  travels.pop_back();
-  drone_travel.push_back(make_pair(drone.id,bestTravel));
-  //remember to reserve at wareHouse and at client
-  reserveProductsForTravel(bestTravel);
-}
-
 void droneConfirmTravel(Drone &drone, Travel travel,map<CmdId,vector<CmdId> >& nearestClient){
   // create two DroneOrder, one to load, one the deliver
   // order for load
@@ -694,17 +672,19 @@ void droneConfirmTravel(Drone &drone, Travel travel,map<CmdId,vector<CmdId> >& n
   }
 
   // order for deliver
-  DroneOrder orderDeliver;
-  orderDeliver.orderType=DroneOrder::Deliver;
-  orderDeliver.commandId=travel.commandId;
+  DroneOrder orderDeliverMain;
+  orderDeliverMain.orderType=DroneOrder::Deliver;
+  orderDeliverMain.commandId=travel.commandId;
   for(auto typeId : travel.productsToDeliver){
-    orderDeliver.itemsToPickOrDrop.insert(make_pair(typeId,travel.commandId));
+    orderDeliverMain.itemsToPickOrDrop.insert(make_pair(typeId,travel.commandId));
   }
 
   //try to find some other product to deliver together in this travel
   Command &mainCmd = commands[travel.commandId];
   WareHouse &ware = wareHouses[travel.wareId];
   vector<DroneOrder> deliverOrders;
+  deliverOrders.push_back(orderDeliverMain);
+
   //int lastX=mainCmd.x, lastY = mainCmd.y;
   vector<CmdId> nextNearestClient=nearestClient[travel.commandId];
   reverse(nextNearestClient.begin(),nextNearestClient.end());//nearest client is at the end
@@ -753,10 +733,25 @@ void droneConfirmTravel(Drone &drone, Travel travel,map<CmdId,vector<CmdId> >& n
   }
 
 
+  //best visit order of clients:
+  int s=deliverOrders.size();
+  vector<int> disMat(s*s);
+  vector<int> ware_cmd_Dis(s);
+  for(int i=0;i<s;i++){
+    for(int j=i;j<s;j++){
+      disMat[i*s+j]=disMat[j*s+i]=
+          distanceRound(commands[deliverOrders[i].commandId].x,commands[deliverOrders[i].commandId].y,
+          commands[deliverOrders[j].commandId].x,commands[deliverOrders[j].commandId].y);
+    }
+    ware_cmd_Dis[i]=distanceRound(ware.x,ware.y,
+                                  commands[deliverOrders[i].commandId].x,
+        commands[deliverOrders[i].commandId].y);
+  }
+  vector<int> result = bestVisitOrder(disMat,ware_cmd_Dis);
+
   drone.giveOneOrder(orderLoad);
-  drone.giveOneOrder(orderDeliver);
-  for(auto &order : deliverOrders){
-    drone.giveOneOrder(order);
+  for(auto r:result){
+    drone.giveOneOrder(deliverOrders[r]);
   }
 }
 void write(vector<unsigned char> & R,vector<unsigned char> & G,vector<unsigned char> & B
@@ -788,6 +783,35 @@ void drawImg(int currentDay){
   }
   write(R,G,B,N,M,currentDay);
 }
+void hungarian_drone_travel(vector<pair<DroneId,Travel> >& drone_travel,
+                            vector<DroneId> &droneIds,
+                            vector<Travel> &travels){
+  int nrows = droneIds.size();
+  int ncols = travels.size();
+  Matrix<double> m(nrows,ncols);
+  const double lambda = droneWareDistanceMultiplier;
+  for(int i=0;i<nrows;i++){
+    for(int j=0;j<ncols;j++){
+      WareHouse& w=wareHouses[travels[j].wareId];
+      Drone &drone = drones[droneIds[i]];
+      int distanceGoto = distanceRound(drone.x,drone.y,w.x,w.y);
+      double score = travels[j].cmdPercent/(travels[j].distance+distanceGoto*lambda);
+      m(i,j)=-score;
+    }
+  }
+
+  Munkres<double> munkres;
+  munkres.solve(m);
+
+  for(int i=0;i<nrows;i++){
+    for(int j=ncols-1;j>=0;j--){
+      if(m(i,j)==0){
+        drone_travel.push_back(make_pair(droneIds[i],travels[j]));
+        break;
+      }
+    }
+  }
+}
 
 int main() {
   readFile(inputFile);
@@ -809,7 +833,6 @@ int main() {
 
 
   //The main loop of day(turn)
-  //TotalTime=100000;
   bool noMoreDemand=false;
   bool weCanStop=false;
   for(currentDay=0;currentDay<TotalTime;currentDay++){
@@ -850,27 +873,43 @@ int main() {
     // wareHouse----(product1,product2,...)------>client
     giveBestTravels(travels);
 
+    if(!travels.empty()){
+      sort(travels.begin(),travels.end(),[](Travel &t1,Travel &t2){
+        return t1.score>t2.score;
+      });
+      if(travels.size()>100){
+        travels.resize(100);
+      }
 
-    sort(travels.begin(),travels.end()); //in order 1<2<3<4, the best travel is at the end
 
+      // loop for drone
+      // each available drone pick a best travel
+      // (we will also consider the distance between the drone and the wareHouse)
+      // and the choice is stored in drone_travel
+      vector<pair<DroneId,Travel> > drone_travel;
 
-    // loop for drone
-    // each available drone pick a best travel
-    // (we will also consider the distance between the drone and the wareHouse)
-    // and the choice is stored in drone_travel
-    vector<pair<DroneId,Travel> > drone_travel;
-    for(auto &drone :drones){
-      if(!drone.isBusy){
-        dronePickTravel(travels,drone,drone_travel);
+      vector<int> freeDroneIds;
+      for(auto &drone :drones){
+
+        if(!drone.isBusy){
+          freeDroneIds.push_back(drone.id);
+        }
+      }
+
+      //find best match between drones and travels
+      hungarian_drone_travel(drone_travel,freeDroneIds,travels);
+
+      //don't forget to reserve products
+      for(auto d_t : drone_travel){
+        reserveProductsForTravel(d_t.second);
+      }
+
+      // drones confirm their travel. When it confirm one travel, it will try to load some other product
+      // from the same wareHouse to deliver to some clients nearby the target client
+      for(auto d_t : drone_travel){
+        droneConfirmTravel(drones[d_t.first],d_t.second,nearestClient);
       }
     }
-
-    // drones confirm their travel. When it confirm one travel, it will try to load some other product
-    // from the same wareHouse to deliver to some clients nearby the target client
-    for(auto d_t : drone_travel){
-      droneConfirmTravel(drones[d_t.first],d_t.second,nearestClient);
-    }
-
     // we do the simulation, each drone perform its action
     // (taking a new task or count down the time before finishing the current task)
     for(auto &drone : drones){
